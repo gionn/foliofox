@@ -1,22 +1,21 @@
 FROM node:22-alpine AS base
 
-# Install dependencies only when needed
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
+# Ensure base image is up to date
+RUN apk upgrade --no-cache && \
+    apk add --no-cache libc6-compat
+
+FROM base AS builder
+
+RUN npm i -g npm@11
+
 WORKDIR /app
 
-# Copy package files
+# Install dependencies
 COPY package.json package-lock.json* ./
 RUN npm ci
 
-# Builder stage
-FROM base AS builder
-WORKDIR /app
-
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-
 # Build the application
+COPY . .
 ENV DOCKER_BUILD=true
 RUN npm run build
 
@@ -37,7 +36,7 @@ COPY --from=builder /app/public ./public
 RUN mkdir .next
 RUN chown nextjs:nodejs .next
 
-# Automatically leverage output traces to reduce image size
+# Copy over only the necessary files for running the application
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
